@@ -2,68 +2,78 @@ package main
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
 
-func main() {
-
-	g, ctx := errgroup.WithContext(context.Background())
-
+func getServer(port int) http.Server {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/week3", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("errorgroup"))
+	mux.HandleFunc("/ask", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ans"))
 	})
 
-	serverOut := make(chan struct{})
-	mux.HandleFunc("/shutdown", func(w http.ResponseWriter, r *http.Request) {
-		serverOut <- struct{}{}
-	})
-
-	server := http.Server{
+	return http.Server{
 		Handler: mux,
-		Addr:    ":8080",
+		Addr:    fmt.Sprintf(":%d", port),
 	}
+}
+
+func main() {
+	g, ctx := errgroup.WithContext(context.Background())
+	done := make(chan error, 2)
+	stop := make(chan struct{})
+
+	server1 := getServer(8080)
+	server2 := getServer(8081)
 
 	g.Go(func() error {
-		return server.ListenAndServe()
+		g.Go(func() error {
+			<- stop
+			fmt.Println("stop serve 1")
+			ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
+			return server1.Shutdown(ctx)
+		})
+		done <- server1.ListenAndServe()
+		return nil
 	})
 
 	g.Go(func() error {
-		select {
-		case <-ctx.Done():
-			log.Println("errgroup exit")
-		case <-serverOut:
-			log.Println("server out soon")
-		}
-
-		timeoutCtx, _ := context.WithTimeout(context.Background(), 1*time.Second)
-
-		log.Println("do shutdown...")
-
-		return server.Shutdown(timeoutCtx)
+		g.Go(func() error {
+			<- stop
+			fmt.Println("stop serve 2")
+			ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
+			return server2.Shutdown(ctx)
+		})
+		done <- server2.ListenAndServe()
+		return nil
 	})
 
-	g.Go(func() error {
-		quit := make(chan os.Signal, 0)
-		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	quit := make(chan os.Signal, 0)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
 
+	g.Go(func() error {
 		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case sig := <-quit:
-			return errors.Errorf("get os signal: %v", sig)
+		case <- ctx.Done():
+			fmt.Printf("err group exit [%+v]\n", ctx.Err())
+		case sig := <- quit:
+			fmt.Printf("get os signal: [%+v]\n", sig)
+		case <- done:
+			fmt.Printf("server err\n")
 		}
+
+		close(stop)
+		return nil
 	})
 
 	if err := g.Wait(); err != nil {
-		log.Println("finished")
+		fmt.Printf("get err [%+v]", err)
 	}
+
+	fmt.Println("finish")
 }
