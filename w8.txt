@@ -1,0 +1,176 @@
+// 并行连接数50，分别使用数据大小 10kb，1000kb，10000kb测试
+// 可以看到redis的响应时长变长，每秒处理请求数减少
+
+redis-benchmark -h x.x.x.x -p 6379 -t set,get -d 10
+====== SET ======
+  100000 requests completed in 1.51 seconds
+  50 parallel clients
+  10 bytes payload
+  keep alive: 1
+
+96.45% <= 1 milliseconds
+97.51% <= 2 milliseconds
+98.87% <= 3 milliseconds
+99.15% <= 4 milliseconds
+99.39% <= 5 milliseconds
+99.52% <= 7 milliseconds
+99.58% <= 8 milliseconds
+99.63% <= 9 milliseconds
+99.65% <= 10 milliseconds
+99.70% <= 11 milliseconds
+99.73% <= 12 milliseconds
+99.79% <= 13 milliseconds
+99.85% <= 14 milliseconds
+99.92% <= 15 milliseconds
+100.00% <= 15 milliseconds
+66269.05 requests per second
+
+====== GET ======
+  100000 requests completed in 1.49 seconds
+  50 parallel clients
+  10 bytes payload
+  keep alive: 1
+
+99.86% <= 1 milliseconds
+99.98% <= 2 milliseconds
+100.00% <= 4 milliseconds
+100.00% <= 4 milliseconds
+67204.30 requests per second
+
+
+
+redis-benchmark -h x.x.x.x -p 6379 -t set,get -d 1000
+====== SET ======
+  100000 requests completed in 1.62 seconds
+  50 parallel clients
+  1000 bytes payload
+  keep alive: 1
+
+93.39% <= 1 milliseconds
+94.90% <= 2 milliseconds
+96.01% <= 3 milliseconds
+97.01% <= 4 milliseconds
+97.60% <= 5 milliseconds
+98.32% <= 6 milliseconds
+98.57% <= 7 milliseconds
+98.81% <= 8 milliseconds
+99.19% <= 9 milliseconds
+99.31% <= 10 milliseconds
+99.55% <= 11 milliseconds
+99.60% <= 12 milliseconds
+99.64% <= 13 milliseconds
+99.81% <= 14 milliseconds
+99.90% <= 15 milliseconds
+99.93% <= 17 milliseconds
+99.98% <= 23 milliseconds
+100.00% <= 23 milliseconds
+61652.28 requests per second
+
+====== GET ======
+  100000 requests completed in 1.65 seconds
+  50 parallel clients
+  1000 bytes payload
+  keep alive: 1
+
+99.58% <= 1 milliseconds
+99.86% <= 4 milliseconds
+99.91% <= 5 milliseconds
+99.93% <= 8 milliseconds
+99.97% <= 9 milliseconds
+99.97% <= 12 milliseconds
+100.00% <= 12 milliseconds
+60422.96 requests per second
+
+
+redis-benchmark -h x.x.x.x -p 6379 -t set,get -d 10000
+====== SET ======
+  100000 requests completed in 1.79 seconds
+  50 parallel clients
+  10000 bytes payload
+  keep alive: 1
+
+97.36% <= 1 milliseconds
+97.67% <= 2 milliseconds
+97.93% <= 3 milliseconds
+97.99% <= 4 milliseconds
+98.04% <= 5 milliseconds
+99.08% <= 6 milliseconds
+99.27% <= 7 milliseconds
+99.32% <= 8 milliseconds
+99.44% <= 9 milliseconds
+99.49% <= 10 milliseconds
+99.56% <= 11 milliseconds
+99.57% <= 12 milliseconds
+99.68% <= 13 milliseconds
+99.75% <= 14 milliseconds
+99.77% <= 15 milliseconds
+99.80% <= 16 milliseconds
+99.93% <= 17 milliseconds
+99.95% <= 20 milliseconds
+99.96% <= 21 milliseconds
+100.00% <= 24 milliseconds
+100.00% <= 24 milliseconds
+55710.31 requests per second
+
+====== GET ======
+  100000 requests completed in 2.41 seconds
+  50 parallel clients
+  10000 bytes payload
+  keep alive: 1
+
+91.11% <= 1 milliseconds
+93.33% <= 2 milliseconds
+93.94% <= 3 milliseconds
+94.41% <= 4 milliseconds
+94.69% <= 5 milliseconds
+95.08% <= 6 milliseconds
+95.66% <= 7 milliseconds
+96.43% <= 8 milliseconds
+96.76% <= 9 milliseconds
+97.43% <= 10 milliseconds
+98.50% <= 11 milliseconds
+98.97% <= 12 milliseconds
+99.37% <= 13 milliseconds
+99.68% <= 14 milliseconds
+99.85% <= 15 milliseconds
+99.91% <= 16 milliseconds
+99.97% <= 21 milliseconds
+100.00% <= 21 milliseconds
+41511.00 requests per second
+
+
+
+---------------------------------
+
+> set x001 123
+> set x002 123
+...
+...
+...
+...
+
+
+// 平均每个key占用内存32kb
+
+// 只保存数字时，该字符串对象的编码是int
+> object encoding x001
+"int"
+
+// 如果保存的值不再是整数，编码方式也会转变
+> set x001 a123
+OK
+> object encoding x001
+"embstr"
+
+// 当字符串小于等于44字节时，编码方式仍为embstr
+> set x001 a123456789a123456789a123456789a123456789a123
+OK
+> object encoding x001
+"embstr"
+
+// 当字符串大于44字节时，编码方式为raw
+> set x001 a123456789a123456789a123456789a123456789a1234
+OK
+> object encoding x001
+"raw"
+
